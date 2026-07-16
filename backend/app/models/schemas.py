@@ -32,6 +32,7 @@ class IncidentOut(BaseModel):
     id: str
     dataset_urn: str
     title: str
+    description: Optional[str] = None
     status: str
     severity: str
     created_at: float
