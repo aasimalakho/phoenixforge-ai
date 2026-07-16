@@ -10,6 +10,7 @@ class Incident(Base):
     id = Column(String, primary_key=True)
     dataset_urn = Column(String, nullable=False)
     title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
     status = Column(String, default="detected")  # detected -> investigating -> repaired -> closed
     severity = Column(String, default="medium")
     created_at = Column(Float, default=time.time)
