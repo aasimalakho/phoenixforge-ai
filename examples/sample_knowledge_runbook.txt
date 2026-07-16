@@ -1,0 +1,9 @@
+PATTERN: upstream schema drift - column rename + unit change
+SYMPTOMS: downstream dbt model fails with "column does not exist"; freshness SLA breaches
+cascade to any fact table and dashboard built on top of it.
+ROOT_CAUSE_SUMMARY: An upstream source system renamed a column and silently changed its
+unit of measure without a corresponding contract update.
+FIX_SUMMARY: Update the staging model to read the new column name and convert units back
+to the previously agreed contract so downstream consumers require no changes.
+PREVENTION_TIP: Add a DataHub data contract assertion on unit + column name for any source
+that feeds a revenue-critical fact table.

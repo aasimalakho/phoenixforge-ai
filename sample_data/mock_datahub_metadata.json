@@ -1,0 +1,130 @@
+{
+  "datasets": [
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,raw.orders_raw,PROD)",
+      "name": "orders_raw",
+      "platform": "sql",
+      "description": "Raw orders ingested from the checkout service.",
+      "schema": [
+        {"field": "order_id", "type": "string"},
+        {"field": "customer_id", "type": "string"},
+        {"field": "order_total", "type": "decimal"},
+        {"field": "order_status", "type": "string"},
+        {"field": "created_at", "type": "timestamp"}
+      ],
+      "owners": ["checkout-team"],
+      "tags": ["raw", "orders"],
+      "assertions": [
+        {"name": "not_null_order_id", "status": "passing"},
+        {"name": "order_total_non_negative", "status": "passing"}
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)",
+      "name": "stg_orders",
+      "platform": "dbt",
+      "description": "Cleaned/staged orders model used across analytics.",
+      "schema": [
+        {"field": "order_id", "type": "string"},
+        {"field": "customer_id", "type": "string"},
+        {"field": "order_total_usd", "type": "decimal"},
+        {"field": "status", "type": "string"},
+        {"field": "created_at", "type": "timestamp"}
+      ],
+      "owners": ["data-platform-team"],
+      "tags": ["staging", "orders"],
+      "assertions": [
+        {"name": "not_null_order_id", "status": "passing"},
+        {"name": "schema_matches_contract", "status": "FAILING"}
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,marts.fct_daily_revenue,PROD)",
+      "name": "fct_daily_revenue",
+      "platform": "dbt",
+      "description": "Daily revenue fact table used by the exec revenue dashboard.",
+      "schema": [
+        {"field": "date", "type": "date"},
+        {"field": "total_revenue_usd", "type": "decimal"},
+        {"field": "order_count", "type": "integer"}
+      ],
+      "owners": ["analytics-engineering"],
+      "tags": ["marts", "revenue", "critical"],
+      "assertions": [
+        {"name": "freshness_sla_24h", "status": "FAILING"}
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards.revenue_dashboard,PROD)",
+      "name": "revenue_dashboard",
+      "platform": "looker",
+      "description": "Executive-facing daily revenue dashboard.",
+      "schema": [
+        {"field": "total_revenue_usd", "type": "decimal"},
+        {"field": "order_count", "type": "integer"}
+      ],
+      "owners": ["bi-team"],
+      "tags": ["dashboard", "executive"],
+      "assertions": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:mlflow,models.churn_risk_model,PROD)",
+      "name": "churn_risk_model",
+      "platform": "mlflow",
+      "description": "ML model predicting customer churn risk, uses order history features.",
+      "schema": [
+        {"field": "customer_id", "type": "string"},
+        {"field": "churn_probability", "type": "float"}
+      ],
+      "owners": ["ml-team"],
+      "tags": ["ml", "churn"],
+      "assertions": []
+    }
+  ],
+  "lineage": [
+    {
+      "source": "urn:li:dataset:(urn:li:dataPlatform:postgres,raw.orders_raw,PROD)",
+      "target": "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)"
+    },
+    {
+      "source": "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)",
+      "target": "urn:li:dataset:(urn:li:dataPlatform:dbt,marts.fct_daily_revenue,PROD)"
+    },
+    {
+      "source": "urn:li:dataset:(urn:li:dataPlatform:dbt,marts.fct_daily_revenue,PROD)",
+      "target": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards.revenue_dashboard,PROD)"
+    },
+    {
+      "source": "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)",
+      "target": "urn:li:dataset:(urn:li:dataPlatform:mlflow,models.churn_risk_model,PROD)"
+    }
+  ],
+  "recent_changes": [
+    {
+      "type": "SCHEMA_CHANGE",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,raw.orders_raw,PROD)",
+      "severity": "high",
+      "description": "Column 'order_total' was renamed to 'order_total' -> upstream checkout service renamed the source column from 'total' to 'order_total_cents' and changed units from dollars to cents, but 'stg_orders' still assumes the old dollar-denominated 'order_total' column exists.",
+      "changed_by": "checkout-team-deploy-bot",
+      "timestamp": 1751500000
+    },
+    {
+      "type": "JOB_FAILURE",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)",
+      "severity": "high",
+      "description": "dbt run failed for model stg_orders: column 'order_total' does not exist.",
+      "changed_by": "airflow-scheduler",
+      "timestamp": 1751500300
+    },
+    {
+      "type": "FRESHNESS_SLA_BREACH",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,marts.fct_daily_revenue,PROD)",
+      "severity": "medium",
+      "description": "fct_daily_revenue has not been updated in 26 hours, breaching its 24h freshness SLA, because upstream stg_orders is failing.",
+      "changed_by": "system",
+      "timestamp": 1751501000
+    }
+  ],
+  "incident_history": [],
+  "knowledge_base": []
+}
