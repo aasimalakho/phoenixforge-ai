@@ -32,13 +32,13 @@ def _log_step(db: Session, incident_id: str, agent_name: str, order: int, summar
     db.add(trace)
     db.commit()
 
-
-def create_incident(db: Session, dataset_urn: str, title: str, severity: str = "medium") -> Incident:
+def create_incident(db: Session, dataset_urn: str, title: str, severity: str = "medium", description: str = None) -> Incident:
     incident = Incident(
         id=str(uuid.uuid4()),
         dataset_urn=dataset_urn,
         title=title,
         severity=severity,
+        description=description,
         status="detected",
     )
     db.add(incident)
@@ -75,7 +75,7 @@ def run_full_investigation(db: Session, incident: Incident) -> Incident:
     db.commit()
 
     # --- Root Cause Agent ---
-    rc_result = root_cause_agent.investigate(incident.dataset_urn, blast_radius["upstream_urns"])
+    rc_result = root_cause_agent.investigate(incident.dataset_urn, blast_radius["upstream_urns"], user_description=incident.description)
     _log_step(
         db, incident.id, "Root Cause Agent", 3,
         "Completed root cause analysis.",
