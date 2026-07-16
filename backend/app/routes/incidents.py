@@ -15,7 +15,7 @@ def scan_for_incidents(db: Session = Depends(get_db)):
     candidates = discovery_agent.scan_for_anomalies()
     created = []
     for c in candidates:
-        incident = orchestrator.create_incident(db, c["dataset_urn"], c["title"], c["severity"])
+        incident = orchestrator.create_incident(db, payload.dataset_urn, payload.title, payload.severity, payload.description)
         created.append(incident.id)
     return {"scanned": len(candidates), "created_incident_ids": created}
 
@@ -23,7 +23,7 @@ def scan_for_incidents(db: Session = Depends(get_db)):
 @router.post("", response_model=IncidentOut)
 def trigger_incident(payload: TriggerIncidentRequest, db: Session = Depends(get_db)):
     """Manually register an incident (used by the dashboard's 'Simulate Incident' button)."""
-    incident = orchestrator.create_incident(db, payload.dataset_urn, payload.title, payload.severity)
+    incident = orchestrator.create_incident(db, payload.dataset_urn, payload.title, payload.severity, payload.description)
     return incident
 
 
