@@ -2,14 +2,23 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStats, listIncidents, triggerScan, createIncident, investigateIncident } from "../api/client";
 
-const DEMO_DATASET_URN =
-  "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)";
+const DEMO_DATASETS = [
+  { urn: "urn:li:dataset:(urn:li:dataPlatform:postgres,raw.orders_raw,PROD)", name: "orders_raw" },
+  { urn: "urn:li:dataset:(urn:li:dataPlatform:dbt,staging.stg_orders,PROD)", name: "stg_orders" },
+  { urn: "urn:li:dataset:(urn:li:dataPlatform:dbt,marts.fct_daily_revenue,PROD)", name: "fct_daily_revenue" },
+  { urn: "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards.revenue_dashboard,PROD)", name: "revenue_dashboard" },
+  { urn: "urn:li:dataset:(urn:li:dataPlatform:mlflow,models.churn_risk_model,PROD)", name: "churn_risk_model" },
+];
 
 export default function Overview() {
   const [stats, setStats] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+
+  const [datasetUrn, setDatasetUrn] = useState(DEMO_DATASETS[1].urn);
+  const [problemText, setProblemText] = useState("");
+  const [severity, setSeverity] = useState("medium");
 
   const refresh = async () => {
     try {
@@ -35,16 +44,29 @@ export default function Overview() {
     setBusy(false);
   };
 
-  const handleSimulate = async () => {
+  const deriveTitle = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed) return "Untitled incident";
+    return trimmed.length > 90 ? trimmed.slice(0, 90) + "..." : trimmed;
+  };
+
+  const handleInvestigate = async (e) => {
+    e.preventDefault();
+    if (!problemText.trim()) return;
     setBusy(true);
-    const incident = await createIncident({
-      dataset_urn: DEMO_DATASET_URN,
-      title: "stg_orders dbt run failing - column 'order_total' missing",
-      severity: "high",
-    });
-    await investigateIncident(incident.id);
-    await refresh();
-    setBusy(false);
+    try {
+      const incident = await createIncident({
+        dataset_urn: datasetUrn,
+        title: deriveTitle(problemText),
+        severity,
+        description: problemText.trim(),
+      });
+      await investigateIncident(incident.id);
+      setProblemText("");
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -80,20 +102,74 @@ export default function Overview() {
         </div>
       )}
 
-      <div className="btn-row">
-        <button className="btn btn-primary" onClick={handleSimulate} disabled={busy}>
-          {busy ? "Running agent pipeline..." : "Simulate schema-drift incident"}
-        </button>
-        <button className="btn" onClick={handleScan} disabled={busy}>
-          Scan DataHub for anomalies
-        </button>
-      </div>
+      <div className="section-label">Report a problem</div>
+      <form onSubmit={handleInvestigate} className="card" style={{ marginBottom: 24 }}>
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Which dataset is affected?</div>
+          <select
+            value={datasetUrn}
+            onChange={(e) => setDatasetUrn(e.target.value)}
+            className="btn"
+            style={{ width: "100%", textAlign: "left" }}
+          >
+            {DEMO_DATASETS.map((d) => (
+              <option key={d.urn} value={d.urn}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Describe the problem in your own words</div>
+          <textarea
+            value={problemText}
+            onChange={(e) => setProblemText(e.target.value)}
+            placeholder="e.g. Our revenue dashboard has shown $0 since this morning's dbt run failed..."
+            rows={4}
+            style={{
+              width: "100%",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 8,
+              color: "inherit",
+              padding: 12,
+              fontFamily: "inherit",
+              fontSize: 14,
+              resize: "vertical",
+            }}
+          />
+        </label>
+
+        <label style={{ display: "block", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Severity</div>
+          <select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value)}
+            className="btn"
+            style={{ width: "100%", textAlign: "left" }}
+          >
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+
+        <div className="btn-row">
+          <button className="btn btn-primary" type="submit" disabled={busy || !problemText.trim()}>
+            {busy ? "Running agent pipeline..." : "Investigate this problem"}
+          </button>
+          <button className="btn" type="button" onClick={handleScan} disabled={busy}>
+            Scan DataHub for anomalies
+          </button>
+        </div>
+      </form>
 
       <div className="section-label">Incidents</div>
       {incidents.length === 0 ? (
         <div className="empty-state">
-          No incidents yet. Click "Simulate schema-drift incident" to watch the full
-          seven-agent pipeline run against the demo scenario.
+          No incidents yet. Describe a problem above to watch the full seven-agent
+          pipeline investigate and fix it.
         </div>
       ) : (
         <div className="incident-list">
