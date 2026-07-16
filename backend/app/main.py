@@ -30,9 +30,11 @@ def on_startup():
 @app.get("/api/health")
 def health():
     from .config import settings
+    llm_key = settings.GROQ_API_KEY if settings.LLM_PROVIDER == "groq" else settings.ANTHROPIC_API_KEY
     return {
         "status": "ok",
         "demo_mode": settings.DEMO_MODE,
-        "llm_enabled": bool(settings.ANTHROPIC_API_KEY),
-        "github_enabled": bool(settings.GITHUB_TOKEN and settings.GITHUB_REPO),
+        "llm_provider": settings.LLM_PROVIDER,
+        "llm_enabled": bool(llm_key),
+        "github_enabled": bool(settings.GITHUB_TOKEN and settings.GITHUB_REPO and "your_github" not in settings.GITHUB_TOKEN),
     }
