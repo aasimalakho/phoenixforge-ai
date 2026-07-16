@@ -1,26 +1,40 @@
 """
-Thin wrapper around the Anthropic API. Every agent calls llm_client.ask(...) to do its
-reasoning (root cause analysis, blast-radius explanations, generated SQL/DAG code, PR
-descriptions, natural-language chat answers, etc).
-
-Keeping this in one place means you only need to change one file if you ever want to
-swap models or add retries/caching.
+Thin wrapper around whichever LLM provider is configured. Every agent calls
+llm_client.ask(...) to do its reasoning. Supports Groq (default) or Anthropic.
 """
-from anthropic import Anthropic
 from .config import settings
 
-_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY) if settings.ANTHROPIC_API_KEY else None
+_provider = settings.LLM_PROVIDER.lower()
+_client = None
+
+if _provider == "groq" and settings.GROQ_API_KEY:
+    from groq import Groq
+    _client = Groq(api_key=settings.GROQ_API_KEY)
+elif _provider == "anthropic" and settings.ANTHROPIC_API_KEY:
+    from anthropic import Anthropic
+    _client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
 def ask(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
-    """Send a system+user prompt to Claude and return the plain text response."""
     if _client is None:
+        key_name = "GROQ_API_KEY" if _provider == "groq" else "ANTHROPIC_API_KEY"
         return (
-            "[LLM DISABLED] No ANTHROPIC_API_KEY was set in .env, so PhoenixForge AI is "
-            "running with reasoning disabled. Add your key to backend/.env and restart "
-            "the server to enable real agent reasoning.\n\n"
+            f"[LLM DISABLED] No {key_name} was set in .env (LLM_PROVIDER={_provider}), so "
+            f"PhoenixForge AI is running with reasoning disabled. Add your key to "
+            f"backend/.env and restart the server to enable real agent reasoning.\n\n"
             f"(Would have asked: {user_prompt[:300]})"
         )
+
+    if _provider == "groq":
+        response = _client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return response.choices[0].message.content.strip()
 
     response = _client.messages.create(
         model=settings.ANTHROPIC_MODEL,
